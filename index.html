@@ -4,6 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Players Championship Fantasy Draft</title>
+  <meta name="description" content="Players Championship fantasy golf draft tracker with live scores, draft board, and tournament updates." />
+  <meta name="theme-color" content="#0d3b66" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Players Draft" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Players Championship Fantasy Draft" />
+  <meta property="og:description" content="Live fantasy golf draft tracker for the Players Championship." />
+  <meta property="og:image" content="/share-preview.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="Players Championship Fantasy Draft" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Players Championship Fantasy Draft" />
+  <meta name="twitter:description" content="Live fantasy golf draft tracker for the Players Championship." />
+  <meta name="twitter:image" content="/share-preview.svg" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/share-preview.svg" />
+  <link rel="apple-touch-icon" href="/app-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
@@ -73,7 +93,7 @@
         </form>
       </section>
 
-      <section class="panel">
+      <section class="panel teams-panel">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">Draft Order</p>
@@ -104,7 +124,7 @@
     </main>
 
     <main id="tournamentTab" class="dashboard-grid tournament-grid tab-panel is-active">
-      <section class="panel">
+      <section class="panel teams-panel">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">Rosters</p>
@@ -112,10 +132,25 @@
           </div>
           <span id="pickCountPill" class="pill muted-pill">0 picks made</span>
         </div>
+        <div class="inline-chart-block">
+          <div class="inline-chart-header">
+            <div>
+              <p class="panel-kicker">Progression</p>
+              <h3>Team Score Graph</h3>
+            </div>
+            <div class="inline-chart-actions">
+              <span id="scoreChartPill" class="pill muted-pill">Waiting for score updates</span>
+              <button type="button" id="toggleScoreChartButton" class="outline-button">Hide graph</button>
+            </div>
+          </div>
+          <div id="scoreChart" class="score-chart empty-state">
+            Sync live data or update scores to build the tournament progression graph.
+          </div>
+        </div>
         <div id="teamBoard" class="team-board"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel drafted-panel">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">Scoring</p>
@@ -210,6 +245,7 @@
         </div>
         <div class="team-header-actions">
           <div class="team-total"></div>
+          <div class="team-today"></div>
           <button type="button" class="outline-button team-toggle-button">Show details</button>
         </div>
       </div>
@@ -222,9 +258,11 @@
           <span>Player</span>
           <span>Pos</span>
           <span>Total</span>
+          <span>Thru</span>
           <span>Today</span>
           <span>Win</span>
           <span>MC</span>
+          <span>&nbsp;</span>
         </div>
         <ul class="roster-list"></ul>
       </div>

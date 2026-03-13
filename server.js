@@ -23,9 +23,10 @@ const CONTENT_TYPES = {
 loadDotEnv(ENV_PATH);
 
 const config = {
-  dataGolfKey: process.env.DATAGOLF_API_KEY || "",
+  dataGolfKey: (process.env.DATAGOLF_API_KEY || "").trim(),
   dataGolfBaseUrl: (process.env.DATAGOLF_BASE_URL || "https://feeds.datagolf.com").replace(/\/$/, ""),
-  dataGolfTour: process.env.DATAGOLF_TOUR || "pga"
+  dataGolfTour: process.env.DATAGOLF_TOUR || "pga",
+  adminRoute: normalizeAdminRoute(process.env.ADMIN_ROUTE || "/admin")
 };
 const DATAGOLF_DASHBOARD_STATS = "sg_total,sg_t2g,sg_ott,sg_app,sg_arg,sg_putt,gir,accuracy,distance,scrambling";
 const sharedStateDb = initializeSharedStateDb(DB_PATH);
@@ -35,12 +36,21 @@ const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
+    if (url.pathname === "/" || url.pathname === "/index.html") {
+      return serveIndex(response, "viewer");
+    }
+
+    if (url.pathname === config.adminRoute) {
+      return serveIndex(response, "admin");
+    }
+
     if (url.pathname === "/api/state") {
       if (request.method === "GET") {
         return writeJson(response, 200, sharedStateStore);
       }
 
       if (request.method === "PUT") {
+        ensureAdminRequest(request);
         return await handleSharedStateUpdate(request, response);
       }
 
@@ -65,14 +75,17 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === "/api/datagolf/import") {
+      ensureAdminRequest(request);
       return await handleDataGolfImport(url, response);
     }
 
     if (url.pathname === "/api/live/import") {
+      ensureAdminRequest(request);
       return await handleDataGolfImport(url, response);
     }
 
     if (url.pathname === "/api/live/field") {
+      ensureAdminRequest(request);
       return await handleDataGolfField(url, response);
     }
 
@@ -384,6 +397,7 @@ function normalizeDataGolfLiveStatsPlayer(raw) {
     score: normalizeScoreValue(pickFirst(raw, ["total", "score", "to_par"])),
     todayScore: normalizeScoreValue(pickFirst(raw, ["round", "today", "round_score"])),
     thru: pickFirst(raw, ["thru", "holes_completed", "holes"]) || "",
+    teeTime: pickFirst(raw, ["tee_time", "teetime", "tee", "start_time", "tee_time_local"]) || "",
     money: 0,
     madeCut: true,
     sgTotal: pickFirst(raw, ["sg_total"]),
@@ -592,7 +606,7 @@ function readJsonBody(request) {
 }
 
 function serveStatic(pathname, response) {
-  const resolvedPath = pathname === "/" ? "/index.html" : pathname;
+  const resolvedPath = pathname;
   const filePath = path.join(ROOT, path.normalize(resolvedPath));
 
   if (!filePath.startsWith(ROOT)) {
@@ -620,6 +634,30 @@ function serveStatic(pathname, response) {
   });
 }
 
+function serveIndex(response, mode) {
+  const filePath = path.join(ROOT, "index.html");
+
+  fs.readFile(filePath, "utf8", (error, html) => {
+    if (error) {
+      response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Server error");
+      return;
+    }
+
+    const injected = html.replace(
+      "</head>",
+      `<script>window.APP_CONFIG=${JSON.stringify({ mode, adminRoute: config.adminRoute })};</script></head>`
+    );
+
+    const cookieValue = mode === "admin" ? "admin" : "viewer";
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": `players_mode=${cookieValue}; Path=/; SameSite=Lax`
+    });
+    response.end(injected);
+  });
+}
+
 function writeJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8"
@@ -632,6 +670,48 @@ function logServerError(error) {
   if (error.details) {
     console.error(JSON.stringify(error.details, null, 2));
   }
+}
+
+function parseCookies(headerValue) {
+  return String(headerValue || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, entry) => {
+      const equalsIndex = entry.indexOf("=");
+      if (equalsIndex === -1) {
+        return cookies;
+      }
+      const key = entry.slice(0, equalsIndex).trim();
+      const value = entry.slice(equalsIndex + 1).trim();
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function ensureAdminRequest(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  const headerMode = String(request.headers["x-app-mode"] || "").trim().toLowerCase();
+  const cookieMode = String(cookies.players_mode || "").trim().toLowerCase();
+
+  if (headerMode === "admin" && cookieMode === "admin") {
+    return;
+  }
+
+  const error = new Error("This action is only available from the admin URL.");
+  error.statusCode = 403;
+  error.details = {
+    adminRoute: config.adminRoute
+  };
+  throw error;
+}
+
+function normalizeAdminRoute(value) {
+  const trimmed = String(value || "/admin").trim();
+  if (!trimmed || trimmed === "/") {
+    return "/admin";
+  }
+  return trimmed.startsWith("/") ? trimmed.replace(/\/+$/, "") || "/admin" : `/${trimmed.replace(/\/+$/, "")}`;
 }
 
 

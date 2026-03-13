@@ -3,6 +3,7 @@ const CLIENT_ID_KEY = "players-championship-client-id";
 const MIN_MANAGERS = 2;
 const PICKS_PER_MANAGER = 4;
 const SHARED_STATE_POLL_MS = 4000;
+const APP_CONFIG = window.APP_CONFIG || { mode: "admin", adminRoute: "/admin" };
 
 const defaultGolferState = () => ({
   score: "E",
@@ -21,6 +22,8 @@ const initialState = {
   livePlayers: [],
   dataGolfPlayers: [],
   scores: {},
+  scoreHistory: [],
+  scoreChartCollapsed: false,
   teamDetailsOpen: {},
   draftStarted: false,
   currentPick: 0,
@@ -57,6 +60,9 @@ const elements = {
   draftedLeaderboardModePill: document.getElementById("draftedLeaderboardModePill"),
   leaderboard: document.getElementById("leaderboard"),
   leaderboardModePill: document.getElementById("leaderboardModePill"),
+  scoreChart: document.getElementById("scoreChart"),
+  scoreChartPill: document.getElementById("scoreChartPill"),
+  toggleScoreChartButton: document.getElementById("toggleScoreChartButton"),
   teamCardTemplate: document.getElementById("teamCardTemplate"),
   availableGolferOptions: document.getElementById("availableGolferOptions"),
   pickCountPill: document.getElementById("pickCountPill"),
@@ -119,14 +125,43 @@ function bindEvents() {
   elements.eventName.addEventListener("input", handleFormChange);
   elements.playerPoolInput.addEventListener("input", handleFormChange);
   elements.autoRefreshSelect.addEventListener("change", handleLiveSettingsChange);
+  elements.toggleScoreChartButton.addEventListener("click", toggleScoreChart);
 }
 
 async function initializeApp() {
+  document.body.dataset.appMode = isAdminMode() ? "admin" : "viewer";
+  applyAccessMode();
   await hydrateFromSharedState();
   await checkLiveStatus();
 }
 
+function isAdminMode() {
+  return APP_CONFIG.mode === "admin";
+}
+
+function applyAccessMode() {
+  elements.tabButtons.forEach((button) => {
+    if (["draft", "live"].includes(button.dataset.tab)) {
+      button.hidden = !isAdminMode();
+    }
+  });
+}
+
+function buildRequestHeaders(extraHeaders = {}) {
+  return {
+    ...extraHeaders,
+    "X-App-Mode": isAdminMode() ? "admin" : "viewer"
+  };
+}
+
+function handleReadOnlyAction() {
+  window.alert(`This page is view-only. Use ${APP_CONFIG.adminRoute} to make edits.`);
+}
+
 function handleFormChange() {
+  if (!isAdminMode()) {
+    return;
+  }
   state.eventName = elements.eventName.value.trim() || initialState.eventName;
   state.managers = getManagerInputs().map((input) => input.value.trim());
   state.golfers = parseGolfers(elements.playerPoolInput.value);
@@ -138,6 +173,9 @@ function handleFormChange() {
 }
 
 function handleLiveSettingsChange() {
+  if (!isAdminMode()) {
+    return;
+  }
   state.liveSettings.autoRefreshSeconds = Number(elements.autoRefreshSelect.value) || 0;
   persist();
   setupAutoRefresh();
@@ -145,6 +183,10 @@ function handleLiveSettingsChange() {
 }
 
 function handleRandomizeOrder() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const managers = getManagerInputs().map((input) => input.value.trim()).filter(Boolean);
 
   if (managers.length !== currentManagerCount()) {
@@ -160,6 +202,10 @@ function handleRandomizeOrder() {
 
 function handleStartDraft(event) {
   event.preventDefault();
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
 
   const managers = getManagerInputs().map((input) => input.value.trim());
   const golfers = parseGolfers(elements.playerPoolInput.value);
@@ -183,12 +229,18 @@ function handleStartDraft(event) {
   state.pickHistory = [];
   state.currentPick = 0;
   state.draftStarted = true;
+  state.scoreHistory = [];
+  recordScoreSnapshot("Draft started", true);
 
   persist();
   render();
 }
 
 function resetState() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const confirmed = window.confirm("Reset the event, clear drafted teams, and remove saved scores?");
   if (!confirmed) {
     return;
@@ -222,23 +274,34 @@ function renderStaticViews() {
   renderAvailableGolferOptions();
   renderTeams();
   renderLeaderboard();
+  renderScoreChart();
   renderStatus();
   renderLiveStatus();
 }
 
+function toggleScoreChart() {
+  state.scoreChartCollapsed = !state.scoreChartCollapsed;
+  persist();
+  renderScoreChart();
+}
+
 function renderTabs() {
   const activeTab = state.activeTab || "tournament";
+  const safeTab = !isAdminMode() && ["draft", "live"].includes(activeTab) ? "tournament" : activeTab;
   elements.tabButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.tab === activeTab);
+    button.classList.toggle("is-active", button.dataset.tab === safeTab);
   });
-  elements.draftTab.classList.toggle("is-active", activeTab === "draft");
-  elements.tournamentTab.classList.toggle("is-active", activeTab === "tournament");
-  elements.fullLeaderboardTab.classList.toggle("is-active", activeTab === "fullLeaderboard");
-  elements.liveTab.classList.toggle("is-active", activeTab === "live");
+  elements.draftTab.classList.toggle("is-active", safeTab === "draft");
+  elements.tournamentTab.classList.toggle("is-active", safeTab === "tournament");
+  elements.fullLeaderboardTab.classList.toggle("is-active", safeTab === "fullLeaderboard");
+  elements.liveTab.classList.toggle("is-active", safeTab === "live");
 }
 
 function setActiveTab(tabName) {
-  state.activeTab = ["draft", "tournament", "fullLeaderboard", "live"].includes(tabName) ? tabName : "tournament";
+  const allowedTabs = isAdminMode()
+    ? ["draft", "tournament", "fullLeaderboard", "live"]
+    : ["tournament", "fullLeaderboard"];
+  state.activeTab = allowedTabs.includes(tabName) ? tabName : "tournament";
   persist();
   render();
 }
@@ -266,6 +329,10 @@ function getManagerInputs() {
 }
 
 function addManager() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   if (state.draftStarted) {
     window.alert("Reset the event before changing the number of managers.");
     return;
@@ -277,6 +344,10 @@ function addManager() {
 }
 
 function removeManager() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   if (state.draftStarted) {
     window.alert("Reset the event before changing the number of managers.");
     return;
@@ -431,6 +502,10 @@ function renderLiveStatus() {
 }
 
 function draftGolfer(golfer) {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   if (!state.draftStarted || isDraftComplete()) {
     return;
   }
@@ -478,6 +553,7 @@ function renderTeams() {
     teamCard.querySelector(".team-order").textContent = `${formatStanding(index + 1)} place${draftSlot ? ` • Draft slot ${draftSlot}` : ""}`;
     teamCard.querySelector(".team-name").textContent = manager;
     teamCard.querySelector(".team-total").textContent = formatScore(summary.countingScore);
+    teamCard.querySelector(".team-today").textContent = `Today ${formatScore(summary.countingTodayScore)}`;
     teamCard.classList.toggle("is-collapsed", !isOpen);
     teamBody.classList.toggle("is-collapsed", !isOpen);
     teamBody.hidden = !isOpen;
@@ -488,8 +564,8 @@ function renderTeams() {
     teamButton.dataset.manager = manager;
     teamButton.disabled = teamFull;
     teamToggleButton.dataset.manager = manager;
-    teamAssign.hidden = teamFull;
-    teamAssign.classList.toggle("hidden", teamFull);
+    teamAssign.hidden = teamFull || !isAdminMode();
+    teamAssign.classList.toggle("hidden", teamFull || !isAdminMode());
 
     if (teamFull) {
       teamInput.value = "";
@@ -537,9 +613,11 @@ function toggleTeamDetails(manager, index) {
 
 function renderRosterLine(golfer, droppedGolfer) {
   const details = getGolferDisplay(golfer);
+  const livePlayer = findLivePlayer(golfer);
   const dgPlayer = getDataGolfPlayer(golfer);
   const statusTag = golfer === droppedGolfer ? "Dropped" : (details.madeCut ? "Counting" : "Missed cut");
   const statusClass = normalizeName(statusTag).replaceAll(" ", "-");
+  const thruLabel = formatThruDisplay(livePlayer) || "-";
   const winLabel = dgPlayer?.win !== null && dgPlayer?.win !== undefined ? formatPercent(dgPlayer.win) : "--";
   const cutLabel = dgPlayer?.makeCut !== null && dgPlayer?.makeCut !== undefined ? formatPercent(dgPlayer.makeCut) : "--";
   const winStyle = dgPlayer?.win !== null && dgPlayer?.win !== undefined
@@ -553,14 +631,15 @@ function renderRosterLine(golfer, droppedGolfer) {
     <li>
       <div class="roster-line roster-table-row">
         <div class="roster-player-cell">
-          <strong class="roster-player-name">${escapeHtml(golfer)}</strong>
-          <span class="roster-tag roster-tag-${escapeAttribute(statusClass)}">${escapeHtml(statusTag)}</span>
+          <strong class="roster-player-name roster-player-name-${escapeAttribute(statusClass)}">${escapeHtml(golfer)}</strong>
         </div>
         <span class="roster-cell">${escapeHtml(details.position)}</span>
         <span class="roster-cell">${escapeHtml(formatScore(details.effectiveScore))}</span>
-        <span class="roster-cell">${escapeHtml(details.rawTodayScore)}</span>
+        <span class="roster-cell">${escapeHtml(thruLabel)}</span>
+        <span class="roster-cell">${escapeHtml(formatScore(normalizeScore(details.rawTodayScore)))}</span>
         <span class="roster-cell roster-probability"${winStyle}>${escapeHtml(winLabel)}</span>
         <span class="roster-cell roster-probability"${cutStyle}>${escapeHtml(cutLabel)}</span>
+        <span class="roster-tag roster-tag-${escapeAttribute(statusClass)}">${escapeHtml(statusTag)}</span>
       </div>
     </li>
   `;
@@ -665,8 +744,8 @@ function renderDraftedLeaderboard() {
             <span class="score-meta drafted-player-meta">${escapeHtml(owner)}</span>
             <span class="score-display live-stat-value">${escapeHtml(details.position)}</span>
             <span class="score-display live-stat-value">${escapeHtml(formatScore(details.effectiveScore))}</span>
-            <span class="score-display live-stat-value">${escapeHtml(details.rawTodayScore)}</span>
             <span class="score-display live-stat-value">--</span>
+            <span class="score-display live-stat-value">${escapeHtml(formatScore(normalizeScore(details.rawTodayScore)))}</span>
             <span class="score-display live-stat-value">--</span>
             <span class="score-display live-stat-value">--</span>
           </div>
@@ -711,9 +790,9 @@ function renderDraftedLiveLeaderboard() {
             <strong class="drafted-player-name">${escapeHtml(player.name)}</strong>
             <span class="score-meta drafted-player-meta">${escapeHtml(owner)}</span>
             <span class="score-display live-stat-value">${escapeHtml(player.position || "-")}</span>
-            <span class="score-display live-stat-value">${escapeHtml(player.score || "E")}</span>
-            <span class="score-display live-stat-value">${escapeHtml(player.todayScore || "E")}</span>
+            <span class="score-display live-stat-value">${escapeHtml(formatScore(normalizeScore(player.score)))}</span>
             <span class="score-display live-stat-value">${escapeHtml(player.thru || "-")}</span>
+            <span class="score-display live-stat-value">${escapeHtml(formatScore(normalizeScore(player.todayScore)))}</span>
             <span class="score-display live-stat-value"${winStyle}>${escapeHtml(winLabel)}</span>
             <span class="score-display live-stat-value"${cutStyle}>${escapeHtml(cutProbLabel)}</span>
           </div>
@@ -729,11 +808,11 @@ function renderDraftedLeaderboardHeader(includeProbabilities) {
       <span>Player</span>
       <span>Manager</span>
       <span>Pos</span>
-      <span>Score</span>
-      <span>Today</span>
+      <span>Total</span>
       <span>Thru</span>
+      <span>Today</span>
       <span>${includeProbabilities ? "Win" : "-"}</span>
-      <span>${includeProbabilities ? "Make Cut" : "-"}</span>
+      <span>${includeProbabilities ? "MC" : "-"}</span>
     </div>
   `;
 }
@@ -757,8 +836,8 @@ function renderLiveLeaderboard() {
       <span>Player</span>
       <span>Pos</span>
       <span>Total</span>
-      <span>Today</span>
       <span>Thru</span>
+      <span>Today</span>
       <span>Win</span>
       <span>Make Cut</span>
       <span>Top 5</span>
@@ -777,6 +856,7 @@ function renderLiveLeaderboard() {
     .map((player) => {
         const owner = state.draftedGolfers[player.name];
         const cutLabel = player.madeCut ? "Made cut" : "Missed cut";
+        const thruLabel = formatThruDisplay(player);
         const dgPlayer = dgMap.get(normalizeName(player.name));
         const winLabel = dgPlayer?.win !== null && dgPlayer?.win !== undefined ? formatPercent(dgPlayer.win) : "--";
         const cutProbLabel = dgPlayer?.makeCut !== null && dgPlayer?.makeCut !== undefined ? formatPercent(dgPlayer.makeCut) : "--";
@@ -790,9 +870,9 @@ function renderLiveLeaderboard() {
               <small>${escapeHtml(owner || "Not drafted")}</small>
             </span>
             <span>${escapeHtml(player.position || "-")}</span>
-            <span>${escapeHtml(player.score || "E")}</span>
-            <span>${escapeHtml(player.todayScore || "E")}</span>
-            <span>${escapeHtml(player.thru || cutLabel)}</span>
+            <span>${escapeHtml(formatScore(normalizeScore(player.score)))}</span>
+            <span>${escapeHtml(thruLabel || cutLabel)}</span>
+            <span>${escapeHtml(formatScore(normalizeScore(player.todayScore)))}</span>
             <span class="dashboard-probability"${winStyle}>${escapeHtml(winLabel)}</span>
             <span class="dashboard-probability"${cutStyle}>${escapeHtml(cutProbLabel)}</span>
             <span>${escapeHtml(formatDashboardMetric(dgPlayer?.top5, true))}</span>
@@ -829,6 +909,256 @@ function formatDashboardMetric(value, isPercent = false) {
   return parsed > 0 ? `+${parsed.toFixed(2)}` : parsed.toFixed(2);
 }
 
+function formatThruDisplay(player) {
+  const thru = String(player?.thru || "").trim();
+  if (thru && thru !== "-" && thru !== "0" && thru.toUpperCase() !== "NOT STARTED") {
+    return thru;
+  }
+
+  const teeTime = String(player?.teeTime || "").trim();
+  if (teeTime) {
+    return teeTime;
+  }
+
+  return "";
+}
+
+function renderScoreChart() {
+  elements.toggleScoreChartButton.textContent = state.scoreChartCollapsed ? "Show graph" : "Hide graph";
+
+  if (state.scoreChartCollapsed) {
+    elements.scoreChart.className = "score-chart hidden";
+    elements.scoreChart.innerHTML = "";
+    elements.scoreChartPill.textContent = "Graph hidden";
+    return;
+  }
+
+  const managers = (state.draftOrder.length ? state.draftOrder : state.managers).filter(Boolean);
+  const history = Array.isArray(state.scoreHistory) ? state.scoreHistory : [];
+
+  if (!managers.length || !history.length) {
+    elements.scoreChart.className = "score-chart empty-state";
+    elements.scoreChart.textContent = "Sync live data or update scores to build the tournament progression graph.";
+    elements.scoreChartPill.textContent = "Waiting for score updates";
+    return;
+  }
+
+  const snapshots = history.filter((entry) => entry && entry.scores && Object.keys(entry.scores).length);
+  if (!snapshots.length) {
+    elements.scoreChart.className = "score-chart empty-state";
+    elements.scoreChart.textContent = "Sync live data or update scores to build the tournament progression graph.";
+    elements.scoreChartPill.textContent = "Waiting for score updates";
+    return;
+  }
+
+  const chartWidth = 820;
+  const chartHeight = 196;
+  const padding = { top: 14, right: 14, bottom: 28, left: 42 };
+  const values = snapshots.flatMap((snapshot) =>
+    managers
+      .map((manager) => snapshot.scores[manager])
+      .filter((value) => Number.isFinite(value))
+  );
+  const minValue = values.length ? Math.min(...values) : 0;
+  const maxValue = values.length ? Math.max(...values) : 0;
+  const spread = Math.max(2, maxValue - minValue || 2);
+  const yMin = minValue - 1;
+  const yMax = maxValue + 1;
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+  const yTicks = buildYAxisTicks(yMin, yMax, 5);
+  const tournamentWindow = buildTournamentWindow(snapshots);
+  const xDateLabels = buildXAxisDateLabels(tournamentWindow, chartWidth, padding);
+  const latest = snapshots[snapshots.length - 1];
+  const first = snapshots[0];
+
+  const chartLines = managers.map((manager, index) => {
+    const color = chartColorForIndex(index, managers.length);
+    const points = snapshots.map((snapshot, snapshotIndex) => {
+      const score = Number(snapshot.scores[manager] ?? 0);
+      const x = padding.left + innerWidth * getSnapshotXRatio(snapshot, tournamentWindow);
+      const y = padding.top + ((yMax - score) / (yMax - yMin || 1)) * innerHeight;
+      return { x, y, score };
+    });
+    const linePath = buildSmoothChartPath(points);
+    const lastPoint = points[points.length - 1];
+
+    return `
+      <g>
+        <path d="${linePath}" fill="none" stroke="${color}" stroke-opacity="0.9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+        <text x="${Math.min(chartWidth - 4, lastPoint.x + 6).toFixed(1)}" y="${Math.max(12, lastPoint.y - 6).toFixed(1)}" fill="${color}" font-size="10" font-family="Space Grotesk, sans-serif">${escapeHtml(manager)}</text>
+      </g>
+    `;
+  }).join("");
+
+  elements.scoreChart.className = "score-chart";
+  elements.scoreChart.innerHTML = `
+    <div class="score-chart-shell">
+      <svg viewBox="0 0 ${chartWidth} ${chartHeight}" class="score-chart-svg" role="img" aria-label="Team score progression graph">
+        ${yTicks.map((tick) => {
+          const y = padding.top + ((yMax - tick) / (yMax - yMin || 1)) * innerHeight;
+          return `
+            <g>
+              <line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${chartWidth - padding.right}" y2="${y.toFixed(1)}" stroke="rgba(19, 33, 44, 0.10)" stroke-dasharray="4 4"></line>
+              <text x="${padding.left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="rgba(19, 33, 44, 0.72)" font-size="10" font-family="Space Grotesk, sans-serif">${escapeHtml(formatScore(tick))}</text>
+            </g>
+          `;
+        }).join("")}
+        <line x1="${padding.left}" y1="${chartHeight - padding.bottom}" x2="${chartWidth - padding.right}" y2="${chartHeight - padding.bottom}" stroke="rgba(19, 33, 44, 0.24)"></line>
+        <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${chartHeight - padding.bottom}" stroke="rgba(19, 33, 44, 0.24)"></line>
+        ${chartLines}
+        ${xDateLabels.map((label) => `
+          <text x="${label.x.toFixed(1)}" y="${chartHeight - 8}" text-anchor="${label.anchor}" fill="rgba(19, 33, 44, 0.72)" font-size="10" font-family="Space Grotesk, sans-serif">${label.text}</text>
+        `).join("")}
+      </svg>
+      <div class="score-chart-meta">
+        <span>${escapeHtml(formatSnapshotLabel(first))}</span>
+        <span>${escapeHtml(formatSnapshotLabel(latest))}</span>
+      </div>
+    </div>
+  `;
+  elements.scoreChartPill.textContent = `${snapshots.length} updates tracked`;
+}
+
+function recordScoreSnapshot(label = "", force = false) {
+  const standings = getProjectedStandings();
+  const managers = standings.map((entry) => entry.manager);
+  if (!managers.length) {
+    return;
+  }
+
+  const scores = standings.reduce((accumulator, entry) => {
+    accumulator[entry.manager] = entry.countingScore;
+    return accumulator;
+  }, {});
+
+  const lastSnapshot = Array.isArray(state.scoreHistory) && state.scoreHistory.length
+    ? state.scoreHistory[state.scoreHistory.length - 1]
+    : null;
+
+  if (!force && lastSnapshot && areScoreSnapshotsEqual(lastSnapshot.scores, scores)) {
+    return;
+  }
+
+  const snapshot = {
+    timestamp: new Date().toISOString(),
+    label,
+    scores
+  };
+
+  state.scoreHistory = [...(state.scoreHistory || []), snapshot].slice(-240);
+}
+
+function areScoreSnapshotsEqual(left, right) {
+  const leftKeys = Object.keys(left || {}).sort();
+  const rightKeys = Object.keys(right || {}).sort();
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key, index) => key === rightKeys[index] && Number(left[key]) === Number(right[key]));
+}
+
+function chartColorForIndex(index, total) {
+  const hue = Math.round((index / Math.max(1, total)) * 300);
+  return `hsl(${hue}, 68%, 42%)`;
+}
+
+function buildSmoothChartPath(points) {
+  if (!points.length) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  }
+
+  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index];
+    const next = points[index + 1];
+    const midX = ((current.x + next.x) / 2).toFixed(1);
+
+    path += ` C ${midX} ${current.y.toFixed(1)}, ${midX} ${next.y.toFixed(1)}, ${next.x.toFixed(1)} ${next.y.toFixed(1)}`;
+  }
+
+  return path;
+}
+
+function buildYAxisTicks(min, max, count) {
+  const ticks = [];
+  const step = (max - min) / Math.max(1, count - 1);
+  for (let index = 0; index < count; index += 1) {
+    ticks.push(Math.round((min + step * index) * 10) / 10);
+  }
+  return ticks;
+}
+
+function buildXAxisDateLabels(tournamentWindow, chartWidth, padding) {
+  const width = chartWidth - padding.left - padding.right;
+  const labels = Array.from({ length: 4 }, (_, index) => {
+    const date = new Date(tournamentWindow.start.getTime());
+    date.setDate(date.getDate() + index);
+    return {
+      text: date.toLocaleDateString([], {
+        month: "numeric",
+        day: "numeric"
+      }),
+      x: padding.left + (width * (index / 3)),
+      anchor: index === 0 ? "start" : index === 3 ? "end" : "middle"
+    };
+  });
+
+  return labels;
+}
+
+function buildTournamentWindow(snapshots) {
+  const latestSnapshot = snapshots[snapshots.length - 1];
+  const baseDate = latestSnapshot?.timestamp ? new Date(latestSnapshot.timestamp) : new Date();
+  const safeBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+  const start = new Date(safeBaseDate);
+  const day = start.getDay();
+  const daysSinceThursday = (day + 7 - 4) % 7;
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - daysSinceThursday);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 3);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
+function getSnapshotXRatio(snapshot, tournamentWindow) {
+  const timestamp = snapshot?.timestamp ? new Date(snapshot.timestamp) : null;
+  if (!timestamp || Number.isNaN(timestamp.getTime())) {
+    return 0;
+  }
+
+  const total = tournamentWindow.end.getTime() - tournamentWindow.start.getTime();
+  if (total <= 0) {
+    return 0;
+  }
+
+  const elapsed = timestamp.getTime() - tournamentWindow.start.getTime();
+  return Math.max(0, Math.min(1, elapsed / total));
+}
+
+function formatSnapshotLabel(snapshot) {
+  const date = snapshot?.timestamp ? new Date(snapshot.timestamp) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return snapshot?.label || "Update";
+  }
+
+  const timeLabel = date.toLocaleDateString([], {
+      month: "numeric",
+      day: "numeric"
+  });
+
+  return snapshot?.label ? `${snapshot.label} • ${timeLabel}` : timeLabel;
+}
+
 function renderAvailableGolferOptions() {
   const golfers = remainingGolfers();
   elements.availableGolferOptions.innerHTML = golfers
@@ -837,6 +1167,10 @@ function renderAvailableGolferOptions() {
 }
 
 function handleTeamAssign(manager, input) {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const golfer = String(input.value || "").trim();
   if (!golfer) {
     return;
@@ -847,6 +1181,10 @@ function handleTeamAssign(manager, input) {
 }
 
 function assignGolferToManager(manager, golfer) {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const roster = golfersForManager(manager);
   if (roster.length >= PICKS_PER_MANAGER) {
     window.alert(`${manager} already has ${PICKS_PER_MANAGER} golfers.`);
@@ -877,12 +1215,17 @@ function assignGolferToManager(manager, golfer) {
 }
 
 function handleScoreChange(event) {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const golfer = event.target.dataset.golfer;
   const field = event.target.dataset.field;
   const current = normalizeGolferState(state.scores[golfer]);
 
   current[field] = field === "madeCut" ? event.target.checked : event.target.value.trim();
   state.scores[golfer] = normalizeGolferState(current);
+  recordScoreSnapshot("Manual score update");
   persist();
   render();
 }
@@ -907,7 +1250,9 @@ function renderStatus() {
 
 async function checkLiveStatus() {
   try {
-    const response = await fetch("/api/live/status");
+    const response = await fetch("/api/live/status", {
+      headers: buildRequestHeaders()
+    });
     if (!response.ok) {
       throw new Error(`Status ${response.status}`);
     }
@@ -925,10 +1270,16 @@ async function checkLiveStatus() {
   }
 
   renderLiveStatus();
-  maybeAutoLoadField();
+  if (isAdminMode()) {
+    maybeAutoLoadField();
+  }
 }
 
 async function syncLiveData() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   await checkLiveStatus();
   if (!liveStatus.available || !liveStatus.configured) {
     renderLiveStatus();
@@ -941,7 +1292,9 @@ async function syncLiveData() {
     const params = new URLSearchParams({
       tour: "pga"
     });
-    const response = await fetch(`/api/live/import?${params.toString()}`);
+    const response = await fetch(`/api/live/import?${params.toString()}`, {
+      headers: buildRequestHeaders()
+    });
     const payload = await readJsonResponse(response, "Unable to read Data Golf response.");
 
     if (!response.ok) {
@@ -963,6 +1316,10 @@ async function syncLiveData() {
 }
 
 async function loadTournamentField(options = {}) {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const { skipStatusCheck = false, allowDraftReset = true, silent = false } = options;
 
   if (fieldLoadInFlight) {
@@ -997,7 +1354,9 @@ async function loadTournamentField(options = {}) {
   try {
     const params = new URLSearchParams({ tour: "pga" });
 
-    const response = await fetch(`/api/live/field?${params.toString()}`);
+    const response = await fetch(`/api/live/field?${params.toString()}`, {
+      headers: buildRequestHeaders()
+    });
     const payload = await readJsonResponse(response, "Unable to read tournament field response.");
 
     if (!response.ok) {
@@ -1031,6 +1390,10 @@ async function loadTournamentField(options = {}) {
 }
 
 async function importCsvLeaderboard() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const [file] = elements.csvFileInput.files || [];
   if (!file) {
     window.alert("Choose a CSV file first.");
@@ -1051,6 +1414,10 @@ async function importCsvLeaderboard() {
 }
 
 function importPastedCsvLeaderboard() {
+  if (!isAdminMode()) {
+    handleReadOnlyAction();
+    return;
+  }
   const text = elements.csvTextInput.value.trim();
   if (!text) {
     window.alert("Paste CSV text first.");
@@ -1159,6 +1526,7 @@ function applyDataGolfImport(payload) {
   state.liveSettings.lastSyncAt = new Date().toISOString();
   state.liveSettings.lastTournamentName = payload.tournament?.name || state.liveSettings.lastTournamentName;
   state.liveSettings.lastSyncSummary = `Loaded Data Golf live stats for ${state.livePlayers.length} golfers and in-play predictions for ${state.dataGolfPlayers.length}.`;
+  recordScoreSnapshot("Data Golf sync");
 }
 
 function applyCsvImport(players, fileName) {
@@ -1190,6 +1558,7 @@ function applyCsvImport(players, fileName) {
   state.liveSettings.lastSyncSummary = `Imported ${players.length} golfers from ${fileName}. Matched ${matched.length} drafted golfers${unmatched.length ? `, unmatched: ${unmatched.join(", ")}` : ""}.`;
   liveStatus.error = "";
   liveStatus.details = null;
+  recordScoreSnapshot(`CSV import: ${fileName}`);
 }
 
 function compareLivePlayers(a, b) {
@@ -1489,6 +1858,7 @@ function summarizeTeam(manager) {
   const dropped = golferDetails.length > 3 ? sortedByWorst[0] : null;
   const countingGolfers = dropped ? golferDetails.filter((entry) => entry.golfer !== dropped.golfer) : golferDetails;
   const countingScore = countingGolfers.reduce((sum, entry) => sum + entry.effectiveScore, 0);
+  const countingTodayScore = countingGolfers.reduce((sum, entry) => sum + normalizeScore(entry.rawTodayScore), 0);
   const totalMoney = golferDetails.reduce((sum, entry) => sum + entry.money, 0);
 
   return {
@@ -1496,6 +1866,7 @@ function summarizeTeam(manager) {
     rosterSize: roster.length,
     droppedGolfer: dropped ? dropped.golfer : null,
     countingScore,
+    countingTodayScore,
     totalMoney,
     golfers: golferDetails
   };
@@ -1507,6 +1878,7 @@ function emptyTeamSummary(manager) {
     rosterSize: 0,
     droppedGolfer: null,
     countingScore: 0,
+    countingTodayScore: 0,
     totalMoney: 0,
     golfers: []
   };
@@ -1736,7 +2108,9 @@ function shuffle(items) {
 
 async function hydrateFromSharedState() {
   try {
-    const response = await fetch("/api/state");
+    const response = await fetch("/api/state", {
+      headers: buildRequestHeaders()
+    });
     if (!response.ok) {
       throw new Error(`Shared state ${response.status}`);
     }
@@ -1774,7 +2148,9 @@ function startSharedStatePolling() {
 
   sharedStatePollHandle = window.setInterval(async () => {
     try {
-      const response = await fetch("/api/state");
+      const response = await fetch("/api/state", {
+        headers: buildRequestHeaders()
+      });
       if (!response.ok) {
         throw new Error(`Shared state ${response.status}`);
       }
@@ -1798,6 +2174,9 @@ function startSharedStatePolling() {
 }
 
 function queueSharedSave() {
+  if (!isAdminMode()) {
+    return;
+  }
   if (isApplyingRemoteState) {
     return;
   }
@@ -1817,9 +2196,9 @@ async function syncSharedState() {
   try {
     const response = await fetch("/api/state", {
       method: "PUT",
-      headers: {
+      headers: buildRequestHeaders({
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         clientId,
         state
@@ -1840,13 +2219,14 @@ async function syncSharedState() {
 
 function hydrateState(source) {
   const parsed = source && typeof source === "object" ? source : {};
-    return {
-      ...structuredClone(initialState),
-      ...parsed,
+  return {
+    ...structuredClone(initialState),
+    ...parsed,
     activeTab: "tournament",
-      teamDetailsOpen: parsed.teamDetailsOpen && typeof parsed.teamDetailsOpen === "object" ? parsed.teamDetailsOpen : {},
-      liveSettings: {
-        ...structuredClone(initialState.liveSettings),
+    scoreChartCollapsed: Boolean(parsed.scoreChartCollapsed),
+    teamDetailsOpen: parsed.teamDetailsOpen && typeof parsed.teamDetailsOpen === "object" ? parsed.teamDetailsOpen : {},
+    liveSettings: {
+      ...structuredClone(initialState.liveSettings),
       ...(parsed.liveSettings || {})
     }
   };

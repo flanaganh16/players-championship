@@ -1,0 +1,17 @@
+{
+  "name": "Players Championship Fantasy Draft",
+  "short_name": "Players Draft",
+  "description": "Fantasy golf draft tracker with live tournament updates.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#082845",
+  "theme_color": "#0d3b66",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -233,6 +233,46 @@ h3 {
 
 .tournament-grid {
   grid-template-columns: minmax(0, 1.18fr) minmax(430px, 1.02fr);
+  align-items: start;
+  gap: 0.52rem;
+}
+
+.teams-panel {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+}
+
+.drafted-panel {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+}
+
+.inline-chart-block {
+  margin-bottom: 0.52rem;
+}
+
+.inline-chart-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin-bottom: 0.34rem;
+}
+
+.inline-chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.36rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.inline-chart-header h3 {
+  font-size: 0.82rem;
+  line-height: 1.05;
+  color: var(--accent-strong);
 }
 
 .full-leaderboard-grid {
@@ -589,7 +629,7 @@ h3 {
 
 .team-roster-header {
   display: grid;
-  grid-template-columns: minmax(120px, 1.6fr) repeat(5, minmax(48px, 0.55fr));
+  grid-template-columns: minmax(120px, 1.38fr) repeat(6, minmax(40px, 0.48fr)) minmax(62px, 0.7fr);
   gap: 0.14rem;
   align-items: center;
   padding: 0 0.08rem;
@@ -597,6 +637,10 @@ h3 {
   font-size: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.team-roster-header span:last-child {
+  opacity: 0;
 }
 
 .team-player-input {
@@ -637,6 +681,15 @@ h3 {
   font-size: 0.62rem;
 }
 
+.team-today {
+  padding: 0.14rem 0.28rem;
+  border-radius: 999px;
+  background: rgba(29, 95, 58, 0.1);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 0.62rem;
+}
+
 .roster-list {
   list-style: none;
   padding: 0;
@@ -660,7 +713,7 @@ h3 {
 
 .roster-table-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1.6fr) repeat(5, minmax(48px, 0.55fr));
+  grid-template-columns: minmax(120px, 1.38fr) repeat(6, minmax(40px, 0.48fr)) minmax(62px, 0.7fr);
   align-items: center;
   gap: 0.12rem;
 }
@@ -683,6 +736,18 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1 1 auto;
+}
+
+.roster-player-name-counting {
+  color: var(--green);
+}
+
+.roster-player-name-dropped {
+  color: #8a6517;
+}
+
+.roster-player-name-missed-cut {
+  color: #9a3127;
 }
 
 .roster-inline-stats {
@@ -725,6 +790,7 @@ h3 {
 }
 
 .roster-tag {
+  justify-self: end;
   flex-shrink: 0;
   padding: 0.1rem 0.22rem;
   border-radius: 999px;
@@ -753,6 +819,32 @@ h3 {
 .leaderboard {
   grid-template-columns: 1fr;
   gap: 0.18rem;
+}
+
+.score-chart {
+  min-height: 142px;
+}
+
+.score-chart-shell {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.score-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: linear-gradient(180deg, rgba(255, 252, 244, 0.76), rgba(239, 233, 218, 0.68));
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 12px;
+}
+
+.score-chart-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.62rem;
 }
 
 .drafted-leaderboard {
@@ -1038,6 +1130,12 @@ h3 {
   .wide-panel {
     grid-column: 1 / -1;
   }
+
+  .teams-panel,
+  .drafted-panel {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 
 @media (max-width: 820px) {
@@ -1077,11 +1175,11 @@ h3 {
   }
 
   .team-roster-header {
-    grid-template-columns: minmax(80px, 1.08fr) repeat(5, minmax(32px, auto));
+    grid-template-columns: minmax(74px, 0.96fr) repeat(6, minmax(28px, auto)) minmax(50px, auto);
   }
 
   .roster-table-row {
-    grid-template-columns: minmax(80px, 1.08fr) repeat(5, minmax(32px, auto));
+    grid-template-columns: minmax(74px, 0.96fr) repeat(6, minmax(28px, auto)) minmax(50px, auto);
   }
 
 }
@@ -1155,19 +1253,24 @@ h3 {
     padding: 0.12rem 0.2rem;
   }
 
+  .tournament-grid .team-today {
+    font-size: 0.58rem;
+    padding: 0.12rem 0.2rem;
+  }
+
   .tournament-grid .team-card-body.is-collapsed,
   .tournament-grid .team-card-body[hidden] {
     display: none !important;
   }
 
   .tournament-grid .team-roster-header {
-    grid-template-columns: minmax(80px, 1.08fr) repeat(5, minmax(32px, auto));
+    grid-template-columns: minmax(74px, 0.96fr) repeat(6, minmax(28px, auto)) minmax(50px, auto);
     gap: 0.1rem;
     font-size: 0.48rem;
   }
 
   .tournament-grid .roster-table-row {
-    grid-template-columns: minmax(80px, 1.08fr) repeat(5, minmax(32px, auto));
+    grid-template-columns: minmax(74px, 0.96fr) repeat(6, minmax(28px, auto)) minmax(50px, auto);
     gap: 0.1rem;
   }
 
@@ -1208,6 +1311,11 @@ h3 {
     min-height: 18px;
     padding: 0.06rem 0.08rem;
     font-size: 0.56rem;
+  }
+
+  .score-chart-meta {
+    flex-direction: column;
+    align-items: start;
   }
 }
 
