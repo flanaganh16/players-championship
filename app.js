@@ -558,6 +558,7 @@ function renderTeams() {
   const standingsMap = new Map(standings.map((entry) => [entry.manager, entry]));
   const draftSlotMap = new Map((state.draftOrder.length ? state.draftOrder : state.managers.filter(Boolean)).map((manager, index) => [manager, index + 1]));
   const boardOrder = standings.length ? standings.map((entry) => entry.manager) : state.managers.filter(Boolean);
+  const performanceBuckets = getDailyPerformanceBuckets();
 
   boardOrder.forEach((manager, index) => {
     const teamCard = elements.teamCardTemplate.content.firstElementChild.cloneNode(true);
@@ -599,7 +600,7 @@ function renderTeams() {
       rosterList.innerHTML = `<li><span class="roster-meta">No golfers drafted yet.</span></li>`;
     } else {
       rosterList.innerHTML = roster
-        .map((golfer) => renderRosterLine(golfer, summary.droppedGolfer))
+        .map((golfer) => renderRosterLine(golfer, summary.droppedGolfer, performanceBuckets))
         .join("");
     }
 
@@ -633,12 +634,13 @@ function toggleTeamDetails(manager, index) {
   renderTeams();
 }
 
-function renderRosterLine(golfer, droppedGolfer) {
+function renderRosterLine(golfer, droppedGolfer, performanceBuckets = getDailyPerformanceBuckets()) {
   const details = getGolferDisplay(golfer);
   const livePlayer = findLivePlayer(golfer);
   const dgPlayer = getDataGolfPlayer(golfer);
   const statusTag = golfer === droppedGolfer ? "Dropped" : (details.madeCut ? "Counting" : "Missed cut");
   const statusClass = normalizeName(statusTag).replaceAll(" ", "-");
+  const performanceEmoji = getDailyPerformanceEmoji(golfer, performanceBuckets);
   const thruLabel = formatThruDisplay(livePlayer) || "-";
   const winLabel = dgPlayer?.win !== null && dgPlayer?.win !== undefined ? formatPercent(dgPlayer.win) : "--";
   const cutLabel = dgPlayer?.makeCut !== null && dgPlayer?.makeCut !== undefined ? formatPercent(dgPlayer.makeCut) : "--";
@@ -653,7 +655,7 @@ function renderRosterLine(golfer, droppedGolfer) {
     <li>
       <div class="roster-line roster-table-row">
         <div class="roster-player-cell">
-          <strong class="roster-player-name roster-player-name-${escapeAttribute(statusClass)}">${escapeHtml(golfer)}</strong>
+          <strong class="roster-player-name roster-player-name-${escapeAttribute(statusClass)}">${escapeHtml(performanceEmoji ? `${performanceEmoji} ${golfer}` : golfer)}</strong>
         </div>
         <span class="roster-cell">${escapeHtml(details.position)}</span>
         <span class="roster-cell">${escapeHtml(formatScore(details.effectiveScore))}</span>
@@ -782,6 +784,7 @@ function renderDraftedLiveLeaderboard() {
   const dgMap = new Map(state.dataGolfPlayers.map((player) => [normalizeName(player.name), player]));
   const winRange = getProbabilityRange(state.dataGolfPlayers, "win");
   const cutRange = getProbabilityRange(state.dataGolfPlayers, "makeCut");
+  const performanceBuckets = getDailyPerformanceBuckets();
   const draftedPlayers = state.livePlayers
     .filter((player) => draftedNames.has(normalizeName(player.name)))
     .sort(compareLivePlayers);
@@ -801,6 +804,7 @@ function renderDraftedLiveLeaderboard() {
     .map((player) => {
       const owner = state.draftedGolfers[player.name];
       const dgPlayer = dgMap.get(normalizeName(player.name));
+      const performanceEmoji = getDailyPerformanceEmoji(player.name, performanceBuckets);
       const winLabel = dgPlayer?.win !== null && dgPlayer?.win !== undefined ? formatPercent(dgPlayer.win) : "--";
       const cutProbLabel = dgPlayer?.makeCut !== null && dgPlayer?.makeCut !== undefined ? formatPercent(dgPlayer.makeCut) : "--";
       const winStyle = dgPlayer?.win !== null && dgPlayer?.win !== undefined ? ` style="${escapeAttribute(buildProbabilityStyle(dgPlayer.win, winRange))}"` : "";
@@ -809,7 +813,7 @@ function renderDraftedLiveLeaderboard() {
       return `
         <article class="score-row live-score-row drafted-score-row is-drafted">
           <div class="drafted-inline-row">
-            <strong class="drafted-player-name">${escapeHtml(player.name)}</strong>
+            <strong class="drafted-player-name">${escapeHtml(performanceEmoji ? `${performanceEmoji} ${player.name}` : player.name)}</strong>
             <span class="score-meta drafted-player-meta">${escapeHtml(owner)}</span>
             <span class="score-display live-stat-value">${escapeHtml(player.position || "-")}</span>
             <span class="score-display live-stat-value">${escapeHtml(formatScore(normalizeScore(player.score)))}</span>
@@ -845,6 +849,7 @@ function renderLiveLeaderboard() {
   const dgMap = new Map(state.dataGolfPlayers.map((player) => [normalizeName(player.name), player]));
   const winRange = getProbabilityRange(state.dataGolfPlayers, "win");
   const cutRange = getProbabilityRange(state.dataGolfPlayers, "makeCut");
+  const performanceBuckets = getDailyPerformanceBuckets();
 
   if (!sorted.length) {
     elements.leaderboard.className = "leaderboard empty-state";
@@ -877,6 +882,7 @@ function renderLiveLeaderboard() {
     ...sorted
     .map((player) => {
         const owner = state.draftedGolfers[player.name];
+        const performanceEmoji = getDailyPerformanceEmoji(player.name, performanceBuckets);
         const cutLabel = player.madeCut ? "Made cut" : "Missed cut";
         const thruLabel = formatThruDisplay(player);
         const dgPlayer = dgMap.get(normalizeName(player.name));
@@ -888,7 +894,7 @@ function renderLiveLeaderboard() {
         return `
           <article class="leaderboard-dashboard-row${owner ? " is-drafted" : ""}">
             <span class="dashboard-player-cell">
-              <strong>${escapeHtml(player.name)}</strong>
+              <strong>${escapeHtml(performanceEmoji ? `${performanceEmoji} ${player.name}` : player.name)}</strong>
               <small>${escapeHtml(owner || "Not drafted")}</small>
             </span>
             <span>${escapeHtml(player.position || "-")}</span>
@@ -942,6 +948,58 @@ function formatThruDisplay(player) {
     return teeTime;
   }
 
+  return "";
+}
+
+function getDailyPerformanceBuckets() {
+  const startedPlayers = state.livePlayers
+    .filter((player) => hasStartedRound(player))
+    .map((player) => ({
+      name: player.name,
+      today: normalizeScore(player.todayScore)
+    }));
+
+  if (!startedPlayers.length) {
+    return {
+      hot: new Set(),
+      cold: new Set()
+    };
+  }
+
+  const bucketSize = Math.max(1, Math.ceil(startedPlayers.length * 0.1));
+  const sortedByToday = [...startedPlayers].sort((a, b) => {
+    if (a.today !== b.today) {
+      return a.today - b.today;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  const hot = new Set(sortedByToday.slice(0, bucketSize).map((player) => normalizeName(player.name)));
+  const cold = new Set(sortedByToday.slice(-bucketSize).map((player) => normalizeName(player.name)));
+
+  hot.forEach((name) => {
+    if (cold.has(name)) {
+      hot.delete(name);
+      cold.delete(name);
+    }
+  });
+
+  return { hot, cold };
+}
+
+function hasStartedRound(player) {
+  const thru = String(player?.thru || "").trim().toUpperCase();
+  return Boolean(thru && thru !== "-" && thru !== "0" && thru !== "NOT STARTED");
+}
+
+function getDailyPerformanceEmoji(golfer, buckets = getDailyPerformanceBuckets()) {
+  const normalized = normalizeName(golfer);
+  if (buckets.hot.has(normalized)) {
+    return "🔥";
+  }
+  if (buckets.cold.has(normalized)) {
+    return "🧊";
+  }
   return "";
 }
 
