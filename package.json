@@ -1,0 +1,12 @@
+﻿{
+  "name": "players-championship-fantasy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fantasy golf draft tracker with SportsDataIO live sync",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

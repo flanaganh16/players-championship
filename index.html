@@ -1,0 +1,286 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Players Championship Fantasy Draft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-brand">
+        <div class="hero-mark" aria-hidden="true">
+          <span class="hero-mark-top">THE</span>
+          <span class="hero-mark-main">PLAYERS</span>
+          <span class="hero-mark-bottom">CHAMPIONSHIP</span>
+        </div>
+        <div>
+          <p class="eyebrow">TPC Sawgrass • Island Green</p>
+          <h1>Fantasy Golf Draft Room</h1>
+          <p class="hero-copy">Snake draft, live scores, one compact board.</p>
+        </div>
+      </div>
+      <div class="hero-visual" aria-label="Stylized 17th hole at TPC Sawgrass">
+        <svg viewBox="0 0 320 120" role="img" aria-hidden="true">
+          <rect x="0" y="0" width="320" height="120" rx="18" class="water" />
+          <path d="M10 98 C56 86, 98 86, 132 92 L146 103 L10 110 Z" class="shore" />
+          <ellipse cx="192" cy="62" rx="78" ry="31" class="green" />
+          <ellipse cx="205" cy="62" rx="23" ry="8" class="surface" />
+          <path d="M215 44 L215 18" class="pin" />
+          <circle cx="215" cy="16" r="5" class="flag" />
+          <circle cx="168" cy="54" r="3" class="bunker" />
+          <circle cx="176" cy="76" r="4" class="bunker" />
+          <circle cx="242" cy="73" r="3" class="bunker" />
+          <path d="M124 57 C105 62, 88 70, 68 88" class="ball-line" />
+          <circle cx="122" cy="58" r="3" class="ball" />
+        </svg>
+        <p class="hero-visual-caption">17th-inspired island green detail</p>
+      </div>
+      <div class="hero-actions">
+        <button id="resetAppButton" class="ghost-button">Reset Event</button>
+        <button id="seedDemoButton" class="secondary-button">Load Sample Golfers</button>
+      </div>
+    </header>
+
+    <div class="top-controls">
+      <nav class="tab-bar" aria-label="App sections">
+        <button type="button" class="tab-button is-active" data-tab="draft">Draft Details</button>
+        <button type="button" class="tab-button" data-tab="tournament">Tournament Updates</button>
+        <button type="button" class="tab-button" data-tab="phone">Phone View</button>
+        <button type="button" class="tab-button" data-tab="fullLeaderboard">Full Leaderboard</button>
+        <button type="button" class="tab-button" data-tab="live">Live Sync</button>
+      </nav>
+    </div>
+
+    <main id="draftTab" class="dashboard-grid draft-grid tab-panel is-active">
+      <section class="panel accent-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Setup</p>
+            <h2>League Details</h2>
+          </div>
+          <span id="managerCountPill" class="pill">4 managers</span>
+        </div>
+
+        <form id="settingsForm" class="stack-form">
+          <label>
+            Event name
+            <input id="eventName" name="eventName" type="text" maxlength="80" placeholder="Players Championship Pool" />
+          </label>
+
+          <div class="manager-section">
+            <div class="section-inline">
+              <p class="panel-kicker">Managers</p>
+              <div class="button-row manager-buttons">
+                <button type="button" id="addManagerButton" class="secondary-button">Add Manager</button>
+                <button type="button" id="removeManagerButton" class="outline-button">Remove Manager</button>
+              </div>
+            </div>
+            <div id="managerList" class="manager-grid"></div>
+          </div>
+
+          <label>
+            Golfer pool
+            <textarea id="playerPoolInput" rows="11" placeholder="Paste one golfer per line&#10;Scottie Scheffler&#10;Rory McIlroy&#10;Xander Schauffele"></textarea>
+          </label>
+
+          <div class="button-row">
+            <button type="button" id="randomizeOrderButton">Randomize Draft Order</button>
+            <button type="submit" id="startDraftButton" class="primary-button">Start Draft</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Draft Order</p>
+            <h2>Snake Board</h2>
+          </div>
+          <span id="draftStatusPill" class="pill muted-pill">Waiting to start</span>
+        </div>
+        <div id="draftOrderCard" class="draft-order-card empty-state">
+          Randomize the names and start the draft to build the board.
+        </div>
+        <div id="turnCard" class="turn-card hidden"></div>
+      </section>
+
+      <section class="panel wide-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Draft Room</p>
+            <h2>Available Golfers</h2>
+          </div>
+          <div class="search-wrap">
+            <input id="playerSearchInput" type="search" placeholder="Search golfers" />
+          </div>
+        </div>
+        <div id="availablePlayers" class="player-pool empty-state">
+          Add golfers and start the draft to pick teams.
+        </div>
+      </section>
+    </main>
+
+    <main id="tournamentTab" class="dashboard-grid tournament-grid tab-panel">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Rosters</p>
+            <h2>Fantasy Teams</h2>
+          </div>
+          <span id="pickCountPill" class="pill muted-pill">0 picks made</span>
+        </div>
+        <div id="teamBoard" class="team-board"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Scoring</p>
+            <h2>Drafted Leaderboard</h2>
+          </div>
+          <span id="draftedLeaderboardModePill" class="pill muted-pill">Manual updates</span>
+        </div>
+        <div id="draftedLeaderboard" class="leaderboard empty-state">
+          Draft golfers first, then update each golfer's score and position.
+        </div>
+      </section>
+    </main>
+
+    <main id="fullLeaderboardTab" class="dashboard-grid full-leaderboard-grid tab-panel">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Full Field</p>
+            <h2>Tournament Leaderboard</h2>
+          </div>
+          <span id="leaderboardModePill" class="pill muted-pill">Manual updates</span>
+        </div>
+        <div id="leaderboard" class="leaderboard empty-state">
+          Load live data or import a CSV to see the full tournament leaderboard.
+        </div>
+      </section>
+    </main>
+
+    <main id="phoneTab" class="dashboard-grid phone-grid tab-panel">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Phone View</p>
+            <h2>Fantasy Teams</h2>
+          </div>
+          <span id="phonePickCountPill" class="pill muted-pill">0 picks made</span>
+        </div>
+        <div id="phoneTeamBoard" class="team-board phone-team-board empty-state">
+          Draft golfers to see the team view.
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Phone View</p>
+            <h2>Drafted Leaderboard</h2>
+          </div>
+          <span id="phoneDraftedLeaderboardModePill" class="pill muted-pill">Manual updates</span>
+        </div>
+        <div id="phoneDraftedLeaderboard" class="leaderboard drafted-leaderboard empty-state">
+          Drafted golfers will appear here.
+        </div>
+      </section>
+    </main>
+
+    <main id="liveTab" class="dashboard-grid tournament-grid tab-panel">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Live Data</p>
+            <h2>Live Feed Tools</h2>
+          </div>
+          <span class="pill muted-pill">Server required</span>
+        </div>
+        <div class="live-sync-grid live-sync-grid-simple">
+          <label>
+            Auto refresh
+            <select id="autoRefreshSelect">
+              <option value="0">Off</option>
+              <option value="60">Every 1 minute</option>
+              <option value="180">Every 3 minutes</option>
+              <option value="300">Every 5 minutes</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row live-button-row">
+          <button type="button" id="syncDataGolfButton" class="primary-button">Fetch Data Golf Live</button>
+          <button type="button" id="loadFieldButton" class="secondary-button">Load Data Golf Field</button>
+        </div>
+        <div class="csv-import-row">
+          <label>
+            Leaderboard CSV
+            <input id="csvFileInput" type="file" accept=".csv,text/csv" />
+          </label>
+          <div class="csv-actions">
+            <button type="button" id="downloadCsvTemplateButton" class="outline-button">Download CSV Template</button>
+            <button type="button" id="importCsvButton" class="outline-button">Import CSV Leaderboard</button>
+          </div>
+        </div>
+        <div class="csv-paste-row">
+          <label>
+            Paste leaderboard CSV
+            <textarea id="csvTextInput" rows="6" placeholder="Player,Pos,Total,Today,Money,Status&#10;J.J. Spaun,1,E,E,0,Made"></textarea>
+          </label>
+          <div class="csv-paste-actions">
+            <label class="checkbox-row">
+              <input id="csvLoadFieldToggle" type="checkbox" />
+              Load golfer names into the draft pool if the draft has not started
+            </label>
+            <button type="button" id="importCsvTextButton" class="secondary-button">Import Pasted CSV</button>
+          </div>
+        </div>
+        <div id="liveStatusCard" class="empty-state">
+          Add your Data Golf key to the server config, then use this panel to pull live scores and field data.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="teamCardTemplate">
+    <article class="team-card">
+      <div class="team-header">
+        <div>
+          <p class="team-order"></p>
+          <h3 class="team-name"></h3>
+        </div>
+        <div class="team-header-actions">
+          <div class="team-total"></div>
+          <button type="button" class="outline-button team-toggle-button">Show details</button>
+        </div>
+      </div>
+      <div class="team-card-body">
+        <div class="team-assign">
+          <input class="team-player-input" type="text" list="availableGolferOptions" placeholder="Add golfer to team" />
+          <button type="button" class="outline-button team-player-button">Add</button>
+        </div>
+        <div class="team-roster-header">
+          <span>Player</span>
+          <span>Pos</span>
+          <span>Total</span>
+          <span>Today</span>
+          <span>Win</span>
+          <span>MC</span>
+        </div>
+        <ul class="roster-list"></ul>
+      </div>
+    </article>
+  </template>
+
+  <datalist id="availableGolferOptions"></datalist>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
